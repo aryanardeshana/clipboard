@@ -12,7 +12,7 @@ export default function Header() {
       document.documentElement.classList.remove("dark");
     }
   }, [dark]);
-
+  // hello jsx
   return (
     <header className="sticky top-0 z-50 bg-slate-100 border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800">
       <div className="max-w-auto mx-auto px-6 py-4 flex items-center justify-between">
