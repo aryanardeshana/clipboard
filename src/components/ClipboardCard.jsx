@@ -15,7 +15,7 @@ export default function ClipboardCard() {
   const [errorMessage, setErrorMessage] = useState(""); // new state erray
 
   // ===== GENERATE CODE =====
-  const generateCode = () => {
+  const generateCode = (autoCopy = false) => {
     if (!text.trim()) return;
 
     const code = Math.floor(1000 + Math.random() * 9000).toString();
@@ -34,6 +34,10 @@ export default function ClipboardCard() {
         oneTime: oneTime,
       })
     );
+
+    if (autoCopy) {
+      navigator.clipboard.writeText(code);
+    }
   };
 
   // ===== COPY GENERATED CODE =====
@@ -159,15 +163,18 @@ export default function ClipboardCard() {
                   type="checkbox"
                   checked={oneTime}
                   onChange={() => setOneTime(!oneTime)}
-                  className="appearance-none h-5 w-5 border-2 border-gray-400 dark:border-white rounded-md bg-white dark:bg-transparent checked:bg-blue-600 checked:border-blue-600 cursor-pointer transition"
-                />
+                  className="
+appearance-none h-6 w-6 rounded-lg border-2 border-gray-400 dark:border-gray-500 bg-white dark:bg-gray-700 checked:bg-blue-600 checked:border-blue-600
+dark:checked:bg-blue-600 dark:checked:border-blue-600 relative cursor-pointer transition-all duration-200 before:content-['✓'] before:absolute
+before:text-white before:text-sm before:font-bold
+before:top-1/2 before:left-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:opacity-0 checked:before:opacity-100"/>
                 <label className="text-[15px] text-gray-800 dark:text-white">
                   One-time view
                 </label>
               </div>
 
               <button
-                onClick={() => navigator.clipboard.writeText(text)}
+                onClick={() => generateCode(true)}
                 type="button"
                 className="h-14 w-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition shadow-lg"
               >
@@ -203,18 +210,58 @@ export default function ClipboardCard() {
               Enter 4-digit Code
             </h2>
 
+            {/* 4 digit textare */}
             <div className="flex gap-6 mb-8">
               {retrieveCode.map((digit, i) => (
                 <input
                   key={i}
+                  id={`code-${i}`}
+                  type="text"
+                  inputMode="numeric"
                   maxLength={1}
                   value={digit}
                   onChange={(e) => {
+                    const value = e.target.value;
+
+                    // Only numbers allow
+                    if (!/^[0-9]?$/.test(value)) return;
+
                     const newCode = [...retrieveCode];
-                    newCode[i] = e.target.value;
+                    newCode[i] = value;
                     setRetrieveCode(newCode);
+
+                    // Move to next box
+                    if (value && i < retrieveCode.length - 1) {
+                      document.getElementById(`code-${i + 1}`).focus();
+                    }
                   }}
-                  className="w-16 h-16 text-center text-xl rounded-2xl bg-gray-200 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onKeyDown={(e) => {
+                    if (e.key === "Backspace" && !retrieveCode[i] && i > 0) {
+                      document.getElementById(`code-${i - 1}`).focus();
+                    }
+                  }}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pasteData = e.clipboardData.getData("text").replace(/\D/g, "");
+
+                    if (!pasteData) return;
+
+                    const newCode = [...retrieveCode];
+
+                    for (let j = 0; j < pasteData.length && j < 4; j++) {
+                      newCode[j] = pasteData[j];
+                    }
+
+                    setRetrieveCode(newCode);
+
+                    // Focus last filled box
+                    const lastIndex = Math.min(pasteData.length - 1, 3);
+                    document.getElementById(`code-${lastIndex}`).focus();
+                  }}
+                  className="w-16 h-16 text-center text-xl font-semibold rounded-2xl 
+                 bg-gray-200 dark:bg-gray-800 
+                 focus:outline-none focus:ring-2 focus:ring-blue-500 
+                 transition-all"
                 />
               ))}
             </div>
