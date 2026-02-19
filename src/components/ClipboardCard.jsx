@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faClipboard, faPlay, faShareNodes, faDownload, faChevronDown, faDatabase, faCopy } from "@fortawesome/free-solid-svg-icons";
+import { db } from "../firebase";
+import { collection, addDoc, getDocs, query, where, deleteDoc, doc, serverTimestamp, Timestamp } from "firebase/firestore";
 
 export default function ClipboardCard() {
   const [activeTab, setActiveTab] = useState("share");
@@ -12,10 +14,10 @@ export default function ClipboardCard() {
 
   const [retrieveCode, setRetrieveCode] = useState(["", "", "", ""]);
   const [retrievedText, setRetrievedText] = useState("");
-  const [errorMessage, setErrorMessage] = useState(""); // new state erray
+  const [errorMessage, setErrorMessage] = useState("");
 
-  // ===== GENERATE CODE =====
-  const generateCode = (autoCopy = false) => {
+  // ===== GENERATE CODE + SAVE TO FIREBASE =====
+  const generateCode = async (autoCopy = false) => {
     if (!text.trim()) return;
 
     const code = Math.floor(1000 + Math.random() * 9000).toString();
@@ -26,60 +28,72 @@ export default function ClipboardCard() {
     if (expiry === "30 Minutes") duration = 30 * 60 * 1000;
     if (expiry === "24 Hours") duration = 24 * 60 * 60 * 1000;
 
-    localStorage.setItem(
-      code,
-      JSON.stringify({
+    try {
+      await addDoc(collection(db, "clipboardData"), {
+        code: code,
         message: text,
         expireAt: Date.now() + duration,
         oneTime: oneTime,
-      })
-    );
+        createdAt: Date.now()
+      });
 
-    if (autoCopy) {
-      navigator.clipboard.writeText(code);
+      if (autoCopy) {
+        navigator.clipboard.writeText(code);
+      }
+    } catch (error) {
+      console.error("Error saving data:", error);
     }
   };
 
-  // ===== COPY GENERATED CODE =====
+  // ===== COPY CODE =====
   const copyCode = () => {
     if (generatedCode) {
       navigator.clipboard.writeText(generatedCode);
     }
   };
 
-  // ===== RETRIEVE DATA =====
-  const handleRetrieve = () => {
+  // ===== RETRIEVE FROM FIREBASE =====
+  const handleRetrieve = async () => {
     const code = retrieveCode.join("");
-    const stored = localStorage.getItem(code);
 
-    // juni value saff kari search kr ta pela
     setErrorMessage("");
     setRetrievedText("");
 
-    if (!stored) {
-      setErrorMessage("Invalid code. Please check and try again.");
-      return;
-    }
+    try {
+      const q = query(
+        collection(db, "clipboardData"),
+        where("code", "==", code)
+      );
 
-    const parsed = JSON.parse(stored);
+      const querySnapshot = await getDocs(q);
 
-    // time puro thay gayo ke nai ee check kare
-    if (Date.now() > parsed.expireAt) {
-      localStorage.removeItem(code);
-      setErrorMessage("This code has expired and is no longer available.");
-      return;
-    }
+      if (querySnapshot.empty) {
+        setErrorMessage("Invalid code. Please check and try again.");
+        return;
+      }
 
-    setRetrievedText(parsed.message);
+      const docSnap = querySnapshot.docs[0];
+      const data = docSnap.data();
 
-    if (parsed.oneTime) {
-      localStorage.removeItem(code);
+      if (Date.now() > data.expireAt) {
+        await deleteDoc(doc(db, "clipboardData", docSnap.id));
+        setErrorMessage("This code has expired and is no longer available.");
+        return;
+      }
+
+      setRetrievedText(data.message);
+
+      if (data.oneTime) {
+        await deleteDoc(doc(db, "clipboardData", docSnap.id));
+      }
+    } catch (error) {
+      console.error("Error retrieving data:", error);
+      setErrorMessage("Something went wrong. Try again.");
     }
   };
 
   return (
     <div className="w-full max-w-auto">
-      {/* TOP TEXT */}
       <div className="text-center mb-6">
         <h1 className="text-5xl font-bold text-gray-900 dark:text-white">
           Share Text in Seconds
@@ -89,7 +103,6 @@ export default function ClipboardCard() {
           Fast, secure, and simple.
         </p>
 
-        {/* TABS */}
         <div className="flex justify-center mt-8">
           <div className="flex bg-gray-200 dark:bg-gray-800 p-2 rounded-2xl shadow-sm gap-2">
             <button
@@ -117,10 +130,11 @@ export default function ClipboardCard() {
         </div>
       </div>
 
-      {/* CARD */}
       <div className="bg-[#f5f6f8] dark:bg-gray-900 rounded-[28px] shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-gray-200 dark:border-gray-700 max-w-4xl mx-auto overflow-hidden">
         <div
-          className={`flex transition-transform duration-500 ease-in-out ${activeTab === "retrieve" ? "-translate-x-1/2" : "translate-x-0"
+          className={`flex transition-transform duration-500 ease-in-out ${activeTab === "retrieve"
+            ? "-translate-x-1/2"
+            : "translate-x-0"
             }`}
           style={{ width: "200%" }}
         >
@@ -129,6 +143,7 @@ export default function ClipboardCard() {
             <h2 className="text-[28px] font-semibold text-gray-900 dark:text-white mb-8">
               Clipboard super notes
             </h2>
+
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -163,11 +178,8 @@ export default function ClipboardCard() {
                   type="checkbox"
                   checked={oneTime}
                   onChange={() => setOneTime(!oneTime)}
-                  className="
-appearance-none h-6 w-6 rounded-lg border-2 border-gray-400 dark:border-gray-500 bg-white dark:bg-gray-700 checked:bg-blue-600 checked:border-blue-600
-dark:checked:bg-blue-600 dark:checked:border-blue-600 relative cursor-pointer transition-all duration-200 before:content-['✓'] before:absolute
-before:text-white before:text-sm before:font-bold
-before:top-1/2 before:left-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:opacity-0 checked:before:opacity-100"/>
+                  className="appearance-none h-6 w-6 rounded-lg border-2 border-gray-400 dark:border-gray-500 bg-white dark:bg-gray-700 checked:bg-blue-600 checked:border-blue-600 relative cursor-pointer transition-all duration-200 before:content-['✓'] before:absolute before:text-white before:text-sm before:font-bold before:top-1/2 before:left-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:opacity-0 checked:before:opacity-100"
+                />
                 <label className="text-[15px] text-gray-800 dark:text-white">
                   One-time view
                 </label>
@@ -193,10 +205,17 @@ before:top-1/2 before:left-1/2 before:-translate-x-1/2 before:-translate-y-1/2 b
 
             {generatedCode && (
               <div className="mt-8 bg-green-200 border border-green-400 rounded-2xl p-6 shadow-lg text-center">
-                <h3 className="text-green-800 font-semibold mb-4">Your code is ready!</h3>
+                <h3 className="text-green-800 font-semibold mb-4">
+                  Your code is ready!
+                </h3>
                 <div className="flex items-center justify-between bg-white rounded-xl px-6 py-4">
-                  <span className="text-3xl font-bold tracking-widest">{generatedCode}</span>
-                  <button onClick={copyCode} className="bg-green-600 text-white h-12 w-12 rounded-xl flex items-center justify-center hover:bg-green-700 transition">
+                  <span className="text-3xl font-bold tracking-widest">
+                    {generatedCode}
+                  </span>
+                  <button
+                    onClick={copyCode}
+                    className="bg-green-600 text-white h-12 w-12 rounded-xl flex items-center justify-center hover:bg-green-700 transition"
+                  >
                     <FontAwesomeIcon icon={faCopy} />
                   </button>
                 </div>
@@ -210,7 +229,6 @@ before:top-1/2 before:left-1/2 before:-translate-x-1/2 before:-translate-y-1/2 b
               Enter 4-digit Code
             </h2>
 
-            {/* 4 digit textare */}
             <div className="flex gap-6 mb-8">
               {retrieveCode.map((digit, i) => (
                 <input
@@ -222,16 +240,11 @@ before:top-1/2 before:left-1/2 before:-translate-x-1/2 before:-translate-y-1/2 b
                   value={digit}
                   onChange={(e) => {
                     const value = e.target.value;
-
-                    // Only numbers allow
                     if (!/^[0-9]?$/.test(value)) return;
-
                     const newCode = [...retrieveCode];
                     newCode[i] = value;
                     setRetrieveCode(newCode);
-
-                    // Move to next box
-                    if (value && i < retrieveCode.length - 1) {
+                    if (value && i < 3) {
                       document.getElementById(`code-${i + 1}`).focus();
                     }
                   }}
@@ -240,53 +253,30 @@ before:top-1/2 before:left-1/2 before:-translate-x-1/2 before:-translate-y-1/2 b
                       document.getElementById(`code-${i - 1}`).focus();
                     }
                   }}
-                  onPaste={(e) => {
-                    e.preventDefault();
-                    const pasteData = e.clipboardData.getData("text").replace(/\D/g, "");
-
-                    if (!pasteData) return;
-
-                    const newCode = [...retrieveCode];
-
-                    for (let j = 0; j < pasteData.length && j < 4; j++) {
-                      newCode[j] = pasteData[j];
-                    }
-
-                    setRetrieveCode(newCode);
-
-                    // Focus last filled box
-                    const lastIndex = Math.min(pasteData.length - 1, 3);
-                    document.getElementById(`code-${lastIndex}`).focus();
-                  }}
-                  className="w-16 h-16 text-center text-xl font-semibold rounded-2xl 
-                 bg-gray-200 dark:bg-gray-800 
-                 focus:outline-none focus:ring-2 focus:ring-blue-500 
-                 transition-all"
+                  className="w-16 h-16 text-center text-xl font-semibold rounded-2xl bg-gray-200 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 />
               ))}
             </div>
 
-            <div className="flex items-center gap-4 mb-6">
-              <button
-                onClick={handleRetrieve}
-                className="px-8 py-3 bg-blue-600 text-white rounded-full flex items-center gap-2 hover:bg-blue-700 transition shadow-md font-semibold"
-              >
-                <FontAwesomeIcon icon={faDatabase} />
-                Get Data
-              </button>
-            </div>
+            <button
+              onClick={handleRetrieve}
+              className="px-8 py-3 bg-blue-600 text-white rounded-full flex items-center gap-2 hover:bg-blue-700 transition shadow-md font-semibold"
+            >
+              <FontAwesomeIcon icon={faDatabase} />
+              Get Data
+            </button>
 
-            {/* ERROR MESSAGE DISPLAY */}
             {errorMessage && (
               <div className="w-full p-4 mb-4 bg-red-100 border border-red-400 text-red-700 rounded-xl text-center font-medium animate-pulse">
                 {errorMessage}
               </div>
             )}
 
-            {/* RETRIEVED TEXT DISPLAY */}
             {retrievedText && (
               <div className="mt-4 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl w-full border-2 border-blue-500">
-                <h4 className="text-blue-600 font-bold mb-2 text-sm uppercase">Retrieved Content:</h4>
+                <h4 className="text-blue-600 font-bold mb-2 text-sm uppercase">
+                  Retrieved Content:
+                </h4>
                 <div className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
                   {retrievedText}
                 </div>
