@@ -5,25 +5,39 @@ import { faScissors, faSun, faMoon } from "@fortawesome/free-solid-svg-icons";
 export default function Header() {
   const [dark, setDark] = useState(false);
 
+  //  Detect theme on first load
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme");
+
+    if (savedTheme) {
+      setDark(savedTheme === "dark");
+    } else {
+      const systemPrefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      ).matches;
+      setDark(systemPrefersDark);
+    }
+  }, []);
+
+  //  Apply theme whenever dark changes
   useEffect(() => {
     if (dark) {
       document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
     } else {
       document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
     }
   }, [dark]);
 
   return (
     <header className="sticky top-0 z-50 bg-slate-100 border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800">
-      <div className="max-w-auto mx-auto px-6 py-4 flex items-center justify-between">
+      <div className="mx-auto px-6 py-4 flex items-center justify-between">
 
         {/* LOGO */}
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center">
-            <FontAwesomeIcon
-              icon={faScissors}
-              className="text-white text-lg"
-            />
+            <FontAwesomeIcon icon={faScissors} className="text-white text-lg" />
           </div>
 
           <div>
@@ -36,17 +50,17 @@ export default function Header() {
           </div>
         </div>
 
-        {/* DARK / LIGHT TOGGLE */}
-        <button onClick={() => setDark(!dark)}
-          className="h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 
-          transition flex items-center justify-center"
-          title="Toggle theme">
-
+        {/* TOGGLE */}
+        <button
+          onClick={() => setDark(!dark)}
+          className="h-10 w-10 rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300
+          dark:bg-[#0f1b2d] dark:text-yellow-400 dark:hover:bg-[#13233a]
+          transition-all duration-200 flex items-center justify-center"
+        >
           <FontAwesomeIcon icon={dark ? faSun : faMoon} />
         </button>
 
       </div>
-
     </header>
   );
 }

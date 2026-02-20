@@ -12,7 +12,7 @@ export default function ClipboardCard() {
   const [oneTime, setOneTime] = useState(false);
   const [generatedCode, setGeneratedCode] = useState(null);
 
-  const [retrieveCode, setRetrieveCode] = useState(["", "", "", ""]);
+  const [retrieveCode, setRetrieveCode] = useState(["", "", "", "", "", ""]);
   const [retrievedText, setRetrievedText] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -20,7 +20,7 @@ export default function ClipboardCard() {
   const generateCode = async (autoCopy = false) => {
     if (!text.trim()) return;
 
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedCode(code);
 
     let duration = 60 * 60 * 1000;
@@ -29,12 +29,14 @@ export default function ClipboardCard() {
     if (expiry === "24 Hours") duration = 24 * 60 * 60 * 1000;
 
     try {
-      await addDoc(collection(db, "clipboardData"), {
+      await addDoc(collection(db, "notes"), {
         code: code,
         message: text,
-        expireAt: Date.now() + duration,
         oneTime: oneTime,
-        createdAt: Date.now()
+        createdAt: serverTimestamp(),
+        expireAt: Timestamp.fromDate(
+          new Date(Date.now() + duration)
+        )
       });
 
       if (autoCopy) {
@@ -52,6 +54,31 @@ export default function ClipboardCard() {
     }
   };
 
+  // ===== COPY RETRIEVED TEXT =====
+  const handleCopy = () => {
+    if (retrievedText) {
+      navigator.clipboard.writeText(retrievedText);
+    } else {
+      setErrorMessage("No text available to copy.");
+    }
+  };
+
+  // ===== HANDLE 6-DIGIT PASTE =====
+  const handlePaste = (e) => {
+    e.preventDefault();
+
+    const pastedData = e.clipboardData.getData("text").trim();
+
+    // Only allow exactly 6 digits
+    if (!/^\d{6}$/.test(pastedData)) return;
+
+    const newCode = pastedData.split("");
+    setRetrieveCode(newCode);
+
+    // focus last box
+    document.getElementById("code-5")?.focus();
+  };
+
   // ===== RETRIEVE FROM FIREBASE =====
   const handleRetrieve = async () => {
     const code = retrieveCode.join("");
@@ -61,7 +88,7 @@ export default function ClipboardCard() {
 
     try {
       const q = query(
-        collection(db, "clipboardData"),
+        collection(db, "notes"),
         where("code", "==", code)
       );
 
@@ -75,7 +102,7 @@ export default function ClipboardCard() {
       const docSnap = querySnapshot.docs[0];
       const data = docSnap.data();
 
-      if (Date.now() > data.expireAt) {
+      if (Date.now() > data.expireAt.toDate().getTime()) {
         await deleteDoc(doc(db, "clipboardData", docSnap.id));
         setErrorMessage("This code has expired and is no longer available.");
         return;
@@ -204,21 +231,29 @@ export default function ClipboardCard() {
             </button>
 
             {generatedCode && (
-              <div className="mt-8 bg-green-200 border border-green-400 rounded-2xl p-6 shadow-lg text-center">
-                <h3 className="text-green-800 font-semibold mb-4">
+              <div
+                className="mt-8 bg-green-200 border border-green-400 rounded-2xl p-6 shadow-lg text-left
+              dark:bg-gradient-to-br dark:from-green-900 dark:via-green-800 dark:to-green-900 dark:border-green-600 dark:shadow-[0_0_40px_rgba(34,197,94,0.35)]">
+                <h3 className="text-green-800 dark:text-green-400 font-semibold mb-4">
                   Your code is ready!
                 </h3>
-                <div className="flex items-center justify-between bg-white rounded-xl px-6 py-4">
-                  <span className="text-3xl font-bold tracking-widest">
+
+                <div className="flex items-center justify-between bg-white dark:bg-[#0f172a] rounded-xl px-6 py-4">
+                  <span className="text-3xl font-bold tracking-widest text-gray-900 dark:text-white">
                     {generatedCode}
                   </span>
+
                   <button
                     onClick={copyCode}
-                    className="bg-green-600 text-white h-12 w-12 rounded-xl flex items-center justify-center hover:bg-green-700 transition"
+                    className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 text-white h-12 w-12 rounded-xl flex items-center justify-center transition shadow-md"
                   >
                     <FontAwesomeIcon icon={faCopy} />
                   </button>
                 </div>
+
+                <p className="text-green-700 dark:text-green-300 mt-4 text-sm">
+                  Share this code with anyone to let them access your text.
+                </p>
               </div>
             )}
           </div>
@@ -226,7 +261,7 @@ export default function ClipboardCard() {
           {/* RETRIEVE SECTION */}
           <div className="w-1/2 p-10 flex flex-col items-center justify-start">
             <h2 className="text-[28px] font-semibold text-gray-900 dark:text-white mb-8">
-              Enter 4-digit Code
+              Enter 6-digit Code
             </h2>
 
             <div className="flex gap-6 mb-8">
@@ -238,33 +273,67 @@ export default function ClipboardCard() {
                   inputMode="numeric"
                   maxLength={1}
                   value={digit}
+
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const pastedData = e.clipboardData.getData("text").trim();
+
+                    if (!/^\d{6}$/.test(pastedData)) return;
+
+                    const newCode = pastedData.split("");
+                    setRetrieveCode(newCode);
+                    document.getElementById("code-5")?.focus();
+                  }}
+
                   onChange={(e) => {
                     const value = e.target.value;
                     if (!/^[0-9]?$/.test(value)) return;
+
                     const newCode = [...retrieveCode];
                     newCode[i] = value;
                     setRetrieveCode(newCode);
-                    if (value && i < 3) {
+
+                    if (value && i < 5) {
                       document.getElementById(`code-${i + 1}`).focus();
                     }
                   }}
+
                   onKeyDown={(e) => {
                     if (e.key === "Backspace" && !retrieveCode[i] && i > 0) {
                       document.getElementById(`code-${i - 1}`).focus();
                     }
                   }}
-                  className="w-16 h-16 text-center text-xl font-semibold rounded-2xl bg-gray-200 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+
+                  className="w-16 h-16 text-center text-xl font-semibold rounded-2xl transition-all duration-200
+            bg-gray-200 text-gray-800 dark:bg-[#1e293b] dark:text-white dark:border dark:border-[#334155] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]
+            focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               ))}
             </div>
 
-            <button
-              onClick={handleRetrieve}
-              className="px-8 py-3 bg-blue-600 text-white rounded-full flex items-center gap-2 hover:bg-blue-700 transition shadow-md font-semibold"
-            >
-              <FontAwesomeIcon icon={faDatabase} />
-              Get Data
-            </button>
+            <div className="flex items-center gap-4">
+
+              {/* GET DATA BUTTON */}
+              <button
+                onClick={handleRetrieve}
+                className="px-10 py-3 rounded-full font-semibold flex items-center gap-2 transition
+            bg-gray-400 text-gray-100 hover:bg-gray-500 dark:bg-gray-400/40 dark:text-gray-200 dark:hover:bg-gray-400/60">
+                <FontAwesomeIcon
+                  icon={faDatabase}
+                  className="text-white dark:text-gray-100"
+                />
+                Get Data
+              </button>
+
+              {/* COPY BUTTON */}
+              <button
+                onClick={handleCopy}
+                className="h-11 w-11 flex items-center justify-center transition
+            text-gray-700 hover:text-black dark:text-gray-200 dark:hover:text-white">
+                <FontAwesomeIcon icon={faCopy} size="lg" />
+              </button>
+
+            </div>
 
             {errorMessage && (
               <div className="w-full p-4 mb-4 bg-red-100 border border-red-400 text-red-700 rounded-xl text-center font-medium animate-pulse">
@@ -273,20 +342,19 @@ export default function ClipboardCard() {
             )}
 
             {retrievedText && (
-              <div className="mt-4 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl w-full border-2 border-blue-500">
-                <h4 className="text-blue-600 font-bold mb-2 text-sm uppercase">
-                  Retrieved Content:
-                </h4>
-                <div className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
+              <div className="w-full mt-10">
+                {/* Horizontal Line */}
+                <div className="border-t border-gray-400 dark:border-gray-600 mb-6"></div>
+
+                {/* Content */}
+                <div className="text-gray-800 dark:text-gray-200 text-lg whitespace-pre-wrap break-words">
                   {retrievedText}
                 </div>
               </div>
             )}
-
-            <div className="w-full border-t mt-10"></div>
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 }
