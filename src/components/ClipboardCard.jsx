@@ -175,7 +175,7 @@ export default function ClipboardCard() {
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="Paste or type your text here..."
-              className="w-full h-56 resize-none rounded-2xl border-2 border-gray-500 dark:border-gray-600 bg-white dark:bg-gray-800 p-6 text-[15px] text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-56 resize-none rounded-2xl border-2 border-gray-500 dark:border-gray-600 bg-gray-200 dark:bg-gray-800 p-6 text-[15px] text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 shadow-inner focus:outline-none focus:ring-2 focus:ring-gray-700"
             />
 
             <div className="flex flex-col md:flex-row gap-6 mt-8 items-end">
